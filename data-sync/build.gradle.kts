@@ -5,13 +5,13 @@ plugins {
     id("maven-publish")
 }
 
-version = "1.0.0"
+version = "1.0.1"
 group = "com.example.datasync"
 
 android {
     // This matches the namespace you provided in your snippet
     namespace = "com.example.datasync"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // Libraries don't have applicationId
