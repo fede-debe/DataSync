@@ -1,85 +1,3 @@
-Yes, that’s exactly the right idea 👍
-You can have:
-
-* A **global** `AGENTS.md` at the root of the repo, with high-level rules and links.
-* A **module-specific** `AGENTS.md` inside `data-sync/` with detailed, low-level rules for that module.
-
-Many IDE/AI tools will read *both* and you can also cross-link them via normal Markdown links.
-
-Below is a concrete proposal for both files, already tailored to your `:data-sync` module as it’s implemented right now.
-
----
-
-## 1. Root `AGENTS.md` (global)
-
-Place this at the **repo root**:
-
-```md
-# AI Agent Guidelines
-
-This repository uses AI assistance for development.  
-This document defines **global rules** and explains where to find **module-specific** guidelines.
-
-## Project Overview
-
-- **Language:** Kotlin
-- **Architecture:** MVVM + repositories
-- **Async:** Coroutines + Flow
-- **UI:** Jetpack Compose (where applicable)
-- **Modules:** This repo includes feature and library modules (e.g. `:data-sync`) with their own local rules.
-
-AI agents must always:
-
-1. Prefer **readable, maintainable** code over clever one-liners.
-2. Respect **module boundaries** (do not leak dependencies across modules).
-3. Follow **module-specific AGENTS files** when working inside a given module.
-
----
-
-## Module-specific guidelines
-
-Some modules provide their own `AGENTS.md` with stricter rules.
-
-- **`data-sync/AGENTS.md`**  
-  Defines the canonical way to:
-  - Model results and errors (`Result`, `Error`, `NetworkError`).
-  - Perform network calls (`safeCall`).
-  - Implement offline-first data flows (`OfflineFirstLoader`, `DataSession`, `Resource`).
-  - Structure repositories and ViewModels around offline-first behavior.
-
-> 🧠 **Rule for AI agents:**  
-> When editing code that interacts with networking, caching, or offline behavior,  
-> **always** read and follow `data-sync/AGENTS.md`.
-
----
-
-## Error handling (global rule of thumb)
-
-- Prefer **typed errors** over raw exceptions in public APIs.
-- If you need a reusable result type:
-  - Use `com.example.datasync.domain.Result` and `com.example.datasync.domain.Error` (see `:data-sync`).
-- Do not introduce `kotlin.Result` in new code paths that overlap with data-sync concerns.
-
----
-
-## General Kotlin / Compose practices
-
-When generating or editing Kotlin / Compose code:
-
-- Keep business logic out of composables. UI calls ViewModel → ViewModel calls repository.
-- Prefer `StateFlow` for UI state, exposed as `val uiState: StateFlow<UiState>`.
-- For flows in composables, use `collectAsStateWithLifecycle()`.
-
-For anything related to **data loading, offline, or REST APIs**, **defer to** `data-sync/AGENTS.md`.
-```
-
----
-
-## 2. `data-sync/AGENTS.md` (module-specific)
-
-Place this in `data-sync/AGENTS.md` (you can overwrite your current one with this).
-
-````md
 # Data Sync Module & Offline-First Guidelines
 
 This module provides the **canonical** way to:
@@ -116,7 +34,7 @@ sealed interface Result<out D, out E : Error> {
 }
 
 typealias EmptyResult<E> = Result<Unit, E>
-````
+```
 
 **NetworkError**
 
@@ -391,21 +309,81 @@ class MyViewModel(
 
 When consuming data from `DataSession`:
 
-1. **State & lifecycle**
+### 5.1 State & lifecycle
 
-    * Use an `@Immutable data class MyUiState(...)`.
-    * In composables, use `collectAsStateWithLifecycle()` on `uiState`.
+* Use an `@Immutable data class MyUiState(...)`.
+* In composables, use `collectAsStateWithLifecycle()` on `uiState`.
 
-2. **Offline-first UX**
+### 5.2 Offline-first UX
 
-    * If `Resource.Loading` has non-null data → show data + loading indicator.
-    * If `Resource.Failure` has non-null data → keep data on screen; show Snackbar/Toast or small inline message.
-    * Only show a full-screen error when `data == null` and state is `Failure`.
+* If `Resource.Loading` has non-null data → show data + loading indicator.
+* If `Resource.Failure` has non-null data → keep data on screen; show Snackbar/Toast or small inline message.
+* Only show a full-screen error when `data == null` and state is `Failure`.
 
-3. **Events**
+### 5.3 Events
 
-    * Use a one-shot event pattern (`Channel` + `receiveAsFlow`).
-    * In composables, use a helper like `ObserveAsEvents(events) { ... }`.
+* Use a one-shot event pattern (`Channel` + `receiveAsFlow`) from the ViewModel for transient UI events like showing a Toast.
+* In composables, use the `ObserveAsEvents(events) { ... }` helper to consume these events in a lifecycle-aware way.
+
+**Example:** Showing a toast for a failed network refresh.
+
+```kotlin
+val context = LocalContext.current
+ObserveAsEvents(flow = viewModel.events) { event ->
+    when (event) {
+        is MyEvent.Error -> { // Assuming ViewModel exposes this event on failure
+            Toast.makeText(
+                context,
+                event.error.toString(context), // See localization pattern below
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+}
+```
+
+### 5.4 Localizing Errors
+
+The `data-sync` library provides the `NetworkError` enum, but it does **not** provide UI-facing error strings. This is because a library module cannot bundle its own Android string resources (`res/values/xml`).
+
+The app module is responsible for mapping each error to a user-friendly, localized string.
+
+**Recommended Pattern:**
+Define an extension function in your `app` module to handle the mapping.
+
+**Location:** A UI-level utility file in your app, e.g., `com/example/myapp/ui/utils/ErrorUtils.kt`.
+
+```kotlin
+/**
+ * Maps a [NetworkError] to a localized string.
+ * This function should live in the app module, not the data-sync library.
+ */
+fun NetworkError.toString(context: Context): String {
+    val resId = when (this) {
+        NetworkError.NO_INTERNET -> R.string.error_no_internet
+        NetworkError.SERVER_ERROR -> R.string.error_server_error
+        NetworkError.UNKNOWN -> R.string.error_unknown
+        NetworkError.REQUEST_TIMEOUT -> R.string.error_request_timeout
+        NetworkError.SERIALIZATION -> R.string.error_serialization
+        NetworkError.TOO_MANY_REQUESTS -> R.string.error_too_many_requests
+    }
+    return context.getString(resId)
+}
+```
+
+You would then need to define these string resources in your app's `res/values/strings.xml`:
+
+```xml
+<resources>
+    <string name="error_no_internet">No internet connection.</string>
+    <string name="error_server_error">A server error occurred.</string>
+    <string name="error_unknown">An unknown error occurred.</string>
+    <string name="error_request_timeout">The request timed out.</string>
+    <string name="error_serialization">There was an issue processing the data.</string>
+    <string name="error_too_many_requests">You have made too many requests.</string>
+</resources>
+```
+This approach keeps UI concerns (like localization) in the UI layer, and data concerns in the data layer. You can extend this pattern for your own custom `DomainError` types as well.
 
 ---
 
@@ -439,5 +417,3 @@ Before completing a change that involves data sync / offline-first, check:
     * [ ] Returns `Result<Domain, ErrorType>`.
 * [ ] Repository `getX()` returns `Flow<T?>` from DAO.
 * [ ] ViewModel uses `OfflineFirstLoader.load(...)` for the main list.
-* [ ] UI consumes `Resource<T, E>` and never hides valid data on error/loading.
-* [ ] UI state is an `@Immutable` data class and collected with lifecycle-aware APIs.
