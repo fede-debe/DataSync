@@ -2,10 +2,11 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose.compiler)
     id("maven-publish")
 }
 
-version = "1.0.4"
+version = "1.0.5"
 
 android {
     namespace = "com.example.datasync"
@@ -34,6 +35,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
@@ -52,7 +57,12 @@ dependencies {
     // But if you want to support specific Ktor exceptions in the core, keep it.
     implementation(libs.ktor.client.core)
 
-    // 5. Testing
+    // 5. Compose and Lifecycle
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // 6. Testing
     testImplementation(libs.junit)
     // Essential for testing Coroutines/Flows in your unit tests
     testImplementation(libs.kotlinx.coroutines.test)
@@ -62,7 +72,7 @@ publishing {
     publications {
         create<MavenPublication>("release") {
             artifactId = "data-sync"
-            version = "1.0.4"
+            version = "1.0.5"
 
             afterEvaluate {
                 from(components["release"])
