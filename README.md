@@ -50,7 +50,7 @@ DataSync is a Kotlin-first library for Android that simplifies building robust, 
             }
         )
 
-        val uiState: StateFlow<MyUiState> = session.state.map { ... }.stateIn(...)
+        val uiState: StateFlow<MyUiState> = session.state.map {}.stateIn()
     }
     ```
 
