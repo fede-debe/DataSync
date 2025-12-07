@@ -5,7 +5,7 @@ plugins {
     id("maven-publish")
 }
 
-version = "1.0.2"
+version = "1.0.3"
 
 android {
     namespace = "com.example.datasync"
@@ -61,9 +61,8 @@ dependencies {
 publishing {
     publications {
         create<MavenPublication>("release") {
-            groupId = project.group.toString()
             artifactId = "data-sync"
-            version = project.version.toString()
+            version = "1.0.3"
 
             afterEvaluate {
                 from(components["release"])
